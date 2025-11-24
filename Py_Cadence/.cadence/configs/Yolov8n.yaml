@@ -1,0 +1,53 @@
+project_name: Default
+working_dir: "."
+cmd:
+- python main.py
+provisioning:
+  gpu_type: a10g
+  gpu_count: 1
+  cpu_count: 32
+  ram: 128
+  blank: false
+teamcity:
+  url: https://api.cadence.jetbrains.com
+  build_conf_id: id34a96c5642ff42e99cf48f3b18cd4564_JetTrain
+env:
+  variables:
+    PYTHONUNBUFFERED: "1"
+    KAGGLE_USERNAME: anmtp2k4
+    KAGGLE_KEY: 8a40fabbb581eb2f28624e6c7e0222251
+  python:
+    pip:
+      requirements_path: requirements.txt
+    version: 3.10.11
+  secrets:
+    variables: {}
+    ssh_keys: []
+  aws:
+    sync_config: false
+    sync_credentials: false
+    sync_cache: false
+project_sync:
+  local:
+    root: "."
+    storage_name: Cadence Storage
+    uri: ""
+    exclude:
+    - "/.venv/**,"
+    - "/.cadence/**,"
+    - ""
+    include: []
+    sync_back: true
+    snapshots: true
+    storage_type: DEFAULT
+inputs: []
+outputs:
+- type: OUTPUT
+  storage_name: Cadence Storage
+  uri: ""
+  path: "."
+  acceleration: false
+  storage_type: DEFAULT
+mounts: []
+storages: []
+description: ""

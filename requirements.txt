@@ -1,0 +1,25 @@
+# Vietnamese Food Detection with YOLOv11
+# Requirements file
+
+# Core dependencies
+ultralytics>=8.0.0
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Data handling
+numpy>=1.24.0
+pandas>=2.0.0
+opencv-python>=4.8.0
+Pillow>=10.0.0
+
+# Visualization
+matplotlib>=3.7.0
+
+# Configuration
+PyYAML>=6.0
+
+# Optional: For better performance
+# tensorboard>=2.13.0
+# onnx>=1.14.0
+# onnxruntime>=1.15.0
+
