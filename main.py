@@ -9,8 +9,7 @@ def download_dataset():
     """
     Downloads the vietfood68 dataset from Kaggle.
     """
-    # 1. Setup Credentials FIRST (before importing kaggle)
-    # Check if kaggle.json is in the current directory (project root)
+
     local_kaggle_json = Path("kaggle.json")
     kaggle_config_dir = Path.home() / ".kaggle"
     kaggle_config_file = kaggle_config_dir / "kaggle.json"
@@ -19,13 +18,11 @@ def download_dataset():
         print(f"Found kaggle.json in project root. Copying to {kaggle_config_dir}...")
         kaggle_config_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy(local_kaggle_json, kaggle_config_file)
-        # Set permissions to 600 (required by Kaggle API on Linux/Mac, ignored on Windows usually)
         try:
             os.chmod(kaggle_config_file, 0o600)
         except Exception:
-            pass  # Ignore on Windows if it fails
+            pass  
             
-    # Check for credentials before importing kaggle to avoid crash
     if 'KAGGLE_USERNAME' not in os.environ or 'KAGGLE_KEY' not in os.environ:
         if not kaggle_config_file.exists():
             print("DEBUG: Environment variables:")
@@ -50,16 +47,12 @@ def download_dataset():
     
     print(f"Starting download of {dataset_slug}...")
     
-    # Authenticate and Download logic continues...
     try:
-        # Authenticate
         kaggle.api.authenticate()
         
-        # Download and unzip
         kaggle.api.dataset_download_files(dataset_slug, path=target_dir, unzip=True)
         print(f"Dataset downloaded successfully to {target_dir.absolute()}")
 
-        # Print directory structure for verification
         print("Directory structure:")
         for root, dirs, files in os.walk(target_dir):
             level = root.replace(str(target_dir), '').count(os.sep)
@@ -96,8 +89,6 @@ def measure_fps(model, source_dir, imgsz=640, max_frames=None):
     t0 = time.time()
     frames = 0
 
-    # Run inference
-    # stream=True is often faster for processing many files as it returns a generator
     results = model.predict(source=source_dir, imgsz=imgsz, stream=True, verbose=False)
 
     for r in results:
@@ -125,10 +116,8 @@ def main():
     else:
         print("Dataset already exists.")
 
-    # Ensure data.yaml path is correct (relative to where script runs)
     data_yaml = "data.yaml"
 
-    # 2. Train & Compare Models
     print("\n--- Step 2: Training & Comparison ---")
     models_to_train = ["yolov8n.pt"]
 
@@ -137,12 +126,10 @@ def main():
         run_name = f"vietfood67_{Path(model_name).stem}"
         run_dir = Path("runs/train") / run_name
         
-        # FORCE FRESH START: Delete existing run directory if it exists
         if run_dir.exists():
             print(f"Deleting existing run directory {run_dir} for fresh start...")
             shutil.rmtree(run_dir)
             
-        # Check for existing checkpoint to resume (Logic for FUTURE interruptions)
         last_ckpt_path = run_dir / "weights" / "last.pt"
         
         target_epochs = 50
@@ -153,10 +140,8 @@ def main():
             results = model.train(resume=True)
         else:
             print(f"Starting fresh training for {model_name}...")
-            # Load model
             model = YOLO(model_name)
 
-            # Train
             results = model.train(
                 data=data_yaml,
                 epochs=target_epochs,
@@ -172,13 +157,11 @@ def main():
         best_model_path = Path(results.save_dir) / "weights" / "best.pt"
         print(f"Best model saved at: {best_model_path}")
 
-        # 3. Validate
         print(f"\n--- Validation: {model_name} ---")
         best_model = YOLO(best_model_path)
         metrics = best_model.val(data=data_yaml, split='test')
         print(f"Validation mAP50-95 ({model_name}): {metrics.box.map:.4f}")
 
-        # 4. Benchmark
         print(f"\n--- Benchmarking: {model_name} ---")
         test_images_dir = Path("datasets/vietfood68/dataset/images/test")
         if not test_images_dir.exists():
