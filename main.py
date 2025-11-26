@@ -119,7 +119,7 @@ def main():
     data_yaml = "data.yaml"
 
     print("\n--- Step 2: Training & Comparison ---")
-    models_to_train = ["yolov8n.pt"]
+    models_to_train = ["yolov8s.pt"]
 
     for model_name in models_to_train:
         print(f"\n>>> Processing Model: {model_name} <<<")

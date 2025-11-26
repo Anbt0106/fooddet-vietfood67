@@ -2,7 +2,7 @@ task: detect
 mode: train
 model: yolov8s.pt
 data: data.yaml
-epochs: 36
+epochs: 50
 time: null
 patience: 100
 batch: 16
@@ -35,7 +35,7 @@ overlap_mask: true
 mask_ratio: 4
 dropout: 0.0
 val: true
-split: val
+split: val_v8n
 save_json: false
 conf: null
 iou: 0.7
