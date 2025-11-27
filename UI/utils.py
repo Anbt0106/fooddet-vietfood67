@@ -101,7 +101,15 @@ def _display_detected_frame(conf, model, youtube_url=""):
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tfile:
                     video_path = tfile.name
                 
-                stream.download(output_path=os.path.dirname(video_path), filename=os.path.basename(video_path))
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        stream.download(output_path=os.path.dirname(video_path), filename=os.path.basename(video_path))
+                        break
+                    except Exception as e:
+                        if attempt == max_retries - 1:
+                            raise e
+                        time.sleep(1)
                 
                 results = model(source=video_path, stream=True, conf=conf, imgsz=640, save=True, device="cpu", vid_stride=1)
                 displayed_dishes = set()
