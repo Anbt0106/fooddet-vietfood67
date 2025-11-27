@@ -669,50 +669,7 @@ def detect_webcam(conf, model):
     result_queue.queue.clear()
 
 
-import onnxruntime as ort
 
-model_path = "./model/yolov10/YOLOv10m_new_total_VN_5_SGD.onnx"
-
-
-@st.cache_resource
-def load_onnx_model():
-    session = ort.InferenceSession(model_path)
-    input_name = session.get_inputs()[0].name
-    output_name = session.get_outputs()[0].name
-    return session, input_name, output_name
-
-def preprocess(image):
-    img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    img = cv2.resize(img, (640, 640))
-    img = img.astype(np.float32) / 255.0
-
-    img = img.astype(np.float16)
-
-
-    img = np.transpose(img, (2, 0, 1))
-    img = np.expand_dims(img, axis=0)
-    return img
-
-
-
-def postprocess(outputs, frame, original_size, conf, model):
-    h, w, _ = original_size
-    for output_array in outputs:
-        for output in output_array[0]:
-            x1, y1, x2, y2, score, class_id = output[:6]
-            if score > conf: 
-                x1, y1, x2, y2 = x1 * w / 640, y1 * h / 640, x2 * w / 640, y2 * h / 640
-                x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                if class_id < len(class_names):
-                    class_name = class_names[int(class_id)]["name"]
-                label = f"{class_name}: {score:.2f}"
-
-                font_scale = 1.0  
-                thickness = 3     
-                
-                cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 255, 0), thickness)
-        return frame
 
 def detect_video(conf, uploaded_file, model):
     if uploaded_file:
