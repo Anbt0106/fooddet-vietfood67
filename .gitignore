@@ -25,3 +25,10 @@ kaggle.json
 
 # Notebooks
 Notebooks/
+
+# Large files
+*.pth
+*.avi
+runs/
+__pycache__/
+*.py[cod]

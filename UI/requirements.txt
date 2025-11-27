@@ -1,0 +1,9 @@
+streamlit
+ultralytics
+opencv-python
+onnxruntime
+Pillow
+plotly
+streamlit-webrtc
+av
+pytubefix

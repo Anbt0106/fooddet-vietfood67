@@ -1,7 +1,9 @@
-ultralytics>=8.0.0
-torch>=2.0.0
-torchvision>=0.15.0
-kaggle
-pandas
-numpy
-pyyaml
+streamlit
+ultralytics
+opencv-python-headless
+Pillow
+plotly
+streamlit-webrtc
+av
+pytubefix
+numpy<2.0.0

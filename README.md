@@ -29,7 +29,7 @@ pip install -r requirements.txt
 Run the main pipeline:
 
 ```bash
-python main.py
+python train.py
 ```
 
 This script will:
