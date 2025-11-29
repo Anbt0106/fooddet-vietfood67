@@ -3,7 +3,9 @@ import torch.nn as nn
 import torchvision
 import cv2
 import numpy as np
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+
+
+IMG_SIZE = 640
 
 # ============ LIGHTWEIGHT RPL MODULES ============
 class LightweightChannelAttention(nn.Module):
@@ -69,7 +71,7 @@ class ResidualPatternLearning(nn.Module):
 class FasterRCNN_RPL(nn.Module):
     """Faster R-CNN với Lightweight RPL"""
 
-    def __init__(self, num_classes, use_rpl=True, num_rpl_blocks=1, img_size=640):
+    def __init__(self, num_classes, use_rpl=True, num_rpl_blocks=1):
         super().__init__()
 
         # Load base model
@@ -78,13 +80,15 @@ class FasterRCNN_RPL(nn.Module):
         )
 
         # Config - Set proper image size range
-        self.base_model.transform.min_size = (img_size,)
-        self.base_model.transform.max_size = img_size
+        self.base_model.transform.min_size = (IMG_SIZE,)
+        self.base_model.transform.max_size = IMG_SIZE
 
         # Replace ROI head
         in_features = self.base_model.roi_heads.box_predictor.cls_score.in_features
         self.base_model.roi_heads.box_predictor = \
-            FastRCNNPredictor(in_features, num_classes)
+            torchvision.models.detection.faster_rcnn.FastRCNNPredictor(
+                in_features, num_classes
+            )
 
         self.use_rpl = use_rpl
 
@@ -111,6 +115,16 @@ class FasterRCNN_RPL(nn.Module):
             return enhanced_outputs
 
         fpn.forward = new_forward
+
+    def freeze_rpl(self):
+        if self.use_rpl:
+            for param in self.rpl_modules.parameters():
+                param.requires_grad = False
+
+    def unfreeze_rpl(self):
+        if self.use_rpl:
+            for param in self.rpl_modules.parameters():
+                param.requires_grad = True
 
     def forward(self, images, targets=None):
         return self.base_model(images, targets)
