@@ -278,6 +278,9 @@ class FasterRCNNWrapper:
         boxes = pred['boxes'].cpu().numpy()
         scores = pred['scores'].cpu().numpy()
         labels = pred['labels'].cpu().numpy()
+        # Faster R-CNN uses 1-based indexing (0 is background), but our class_names are 0-based.
+        # We need to subtract 1 to align them.
+        labels = labels - 1
         
         # Filter by confidence
         keep = scores >= conf
@@ -294,6 +297,9 @@ class FasterRCNNWrapper:
     def track(self, source, conf=0.5, imgsz=640, **kwargs):
         # Faster R-CNN tracking not implemented, fallback to predict
         return self.predict(source, conf, imgsz, **kwargs)
+
+    def __call__(self, source=None, stream=False, **kwargs):
+        return self.predict(source, **kwargs)
 
 class FasterRCNNResult:
     def __init__(self, orig_img, boxes, scores, labels):
