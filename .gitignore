@@ -27,7 +27,7 @@ kaggle.json
 Notebooks/
 
 # Large files
-*.pth
+# *.pth
 *.avi
 runs/
 __pycache__/
