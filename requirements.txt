@@ -7,3 +7,17 @@ streamlit-webrtc
 av
 pytubefix
 numpy<2.0.0
+torch==2.2.2
+torchvision==0.17.2
+torchaudio==2.2.2
+kaggle
+
+opencv-python-headless==4.8.1.78
+pillow
+numpy==1.26.4
+pandas==2.1.4
+torchmetrics[detection]==1.3.2
+pycocotools>=2.0.6
+tqdm
+tensorboard
+matplotlib
