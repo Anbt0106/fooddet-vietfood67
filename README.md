@@ -8,6 +8,7 @@ A comprehensive AI-powered system for detecting Vietnamese dishes, featuring a r
 
 ### Web Application
 Built with **Streamlit**, the user interface allows for real-time detection through various inputs:
+-   **Model Selection**: Switch between **YOLOv8** (fast) and **Faster R-CNN** (accurate) models directly in the UI.
 -   **Image Upload**: Detect food in uploaded images or via URL.
 -   **Video Analysis**: Process uploaded video files or YouTube links.
 -   **Webcam**: Live detection using your local webcam.
@@ -25,6 +26,14 @@ The project supports training state-of-the-art object detection models on the **
 -   **Smart Preprocessing**: Includes optimized resizing and stratified sampling.
 
 ## Installation
+
+### Prerequisites
+-   **Git LFS**: This project uses Git Large File Storage for model weights. Please install it before cloning.
+    ```bash
+    git lfs install
+    ```
+
+### Steps
 
 1.  **Clone the repository:**
     ```bash
