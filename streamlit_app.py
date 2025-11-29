@@ -42,9 +42,53 @@ def img_to_base64(img_path):
 img_path = Path(__file__).parent / 'UI/assets/img/bg-about-cuisine.png'
 img_base64 = img_to_base64(img_path)
 
+import os
+import glob
+
+def get_available_models():
+    model_dir = Path(__file__).parent / "UI/model"
+    # Find all .pt and .pth files recursively
+    models = []
+    for root, dirs, files in os.walk(model_dir):
+        for file in files:
+            if file.endswith((".pt", ".pth")):
+                full_path = Path(root) / file
+                # Create a relative path for display or just use filename if unique
+                # Let's use relative path from UI/model for clarity if nested
+                try:
+                    rel_path = full_path.relative_to(model_dir)
+                    
+                    # Generate a nicer display name
+                    if file == 'best.pt':
+                        # Use parent folder name for YOLO models named best.pt
+                        display_name = f"YOLOv8s"
+                    elif file == 'checkpoint_best_rpl.pth':
+                        display_name = "Faster R-CNN"
+                    else:
+                        # Fallback: filename without extension, formatted
+                        display_name = file.rsplit('.', 1)[0].replace('_', ' ').title()
+                        
+                    models.append((display_name, str(full_path)))
+                except ValueError:
+                    models.append((file, str(full_path)))
+    return models
+
 def render_content():
-    st.markdown(f'''<br><br>''', unsafe_allow_html=True)        
-    model1 = load_model()
+    st.markdown(f'''<br><br>''', unsafe_allow_html=True)
+    
+    # Model Selection
+    available_models = get_available_models()
+    if not available_models:
+        st.error("No models found in UI/model directory!")
+        return
+
+    # Default to the first one or a specific one if needed
+    model_options = [m[0] for m in available_models]
+    selected_model_name = st.selectbox("Select Model", model_options)
+    
+    selected_model_path = next(m[1] for m in available_models if m[0] == selected_model_name)
+    
+    model1 = load_model(selected_model_path)
 
     st.markdown("""
     <style>

@@ -225,12 +225,133 @@ def _display_detected_frame(conf, model, youtube_url=""):
     else:
         st.error("YouTube URL is required.")
 
-@st.cache_resource
-def load_model():
-    # modelpath = Path(__file__).parent / "model/checkpoint_best_rpl.pth"
-    modelpath = Path(__file__).parent / "model/vietfood67_yolov8s/best.pt"
+from .faster_rcnn_impl import FasterRCNN_RPL, smart_resize_with_padding, transform_boxes_inverse
 
-    model = YOLO(modelpath, task='detect')
+class FasterRCNNWrapper:
+    def __init__(self, model_path, device='cpu'):
+        self.device = torch.device(device)
+        # Initialize model with same config as training
+        # Assuming num_classes=69 based on training script
+        self.model = FasterRCNN_RPL(num_classes=69, use_rpl=True, num_rpl_blocks=1)
+        
+        # Load checkpoint
+        checkpoint = torch.load(model_path, map_location=self.device)
+        if 'model_state_dict' in checkpoint:
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            self.model.load_state_dict(checkpoint)
+            
+        self.model.to(self.device)
+        self.model.eval()
+        
+    def predict(self, source, conf=0.5, imgsz=640, **kwargs):
+        # Handle source: it can be a PIL Image or numpy array
+        if isinstance(source, Image.Image):
+            img_np = np.array(source)
+            # PIL is RGB, OpenCV expects BGR for some ops but we convert back to RGB for model?
+            # smart_resize expects BGR usually if read by cv2, but let's check implementation
+            # The implementation uses cv2.resize so it works on numpy arrays.
+            # If source is RGB (PIL), we should keep it RGB or convert?
+            # train_FasterRNN.py converts to RGB: cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
+            # So model expects RGB.
+            pass
+        elif isinstance(source, np.ndarray):
+            # Assuming BGR if from cv2
+            # img_np = cv2.cvtColor(source, cv2.COLOR_BGR2RGB)
+            img_np = source[..., ::-1].copy() # BGR to RGB
+        else:
+            raise ValueError("Unsupported source type for Faster R-CNN wrapper")
+
+        # Resize
+        img_resized, scale, offset = smart_resize_with_padding(img_np, target_size=imgsz)
+        
+        # To Tensor
+        img_tensor = torch.from_numpy(img_resized).permute(2, 0, 1).float() / 255.0
+        img_tensor = img_tensor.unsqueeze(0).to(self.device)
+        
+        # Inference
+        with torch.no_grad():
+            predictions = self.model(img_tensor)
+            
+        # Process results
+        pred = predictions[0]
+        boxes = pred['boxes'].cpu().numpy()
+        scores = pred['scores'].cpu().numpy()
+        labels = pred['labels'].cpu().numpy()
+        
+        # Filter by confidence
+        keep = scores >= conf
+        boxes = boxes[keep]
+        scores = scores[keep]
+        labels = labels[keep]
+        
+        # Transform boxes back to original image coordinates
+        orig_boxes = transform_boxes_inverse(boxes, scale, offset)
+        
+        # Wrap results to mimic YOLO result object
+        return [FasterRCNNResult(img_np, orig_boxes, scores, labels)]
+
+    def track(self, source, conf=0.5, imgsz=640, **kwargs):
+        # Faster R-CNN tracking not implemented, fallback to predict
+        return self.predict(source, conf, imgsz, **kwargs)
+
+class FasterRCNNResult:
+    def __init__(self, orig_img, boxes, scores, labels):
+        self.orig_img = np.array(orig_img) # Ensure numpy array
+        self.boxes = FasterRCNNBoxes(boxes, scores, labels)
+        
+    def plot(self):
+        # Draw boxes on image
+        img = self.orig_img.copy()
+        # If RGB, convert to BGR for opencv drawing? 
+        # Usually plot() returns BGR for display in cv2/streamlit
+        if len(img.shape) == 3 and img.shape[2] == 3:
+             # Check if it looks like RGB or BGR? 
+             # YOLO plot() returns BGR.
+             # self.orig_img from PIL is RGB.
+             # img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+             img = img[..., ::-1].copy() # RGB to BGR
+             
+        for i, box in enumerate(self.boxes.xyxy):
+            x1, y1, x2, y2 = map(int, box)
+            label_idx = int(self.boxes.cls[i])
+            score = float(self.boxes.conf[i])
+            
+            # Get class name
+            try:
+                label_name = class_names[label_idx]["name"]
+            except:
+                label_name = str(label_idx)
+                
+            # Draw box
+            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(img, f"{label_name} {score:.2f}", (x1, y1 - 10), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        return img
+
+class FasterRCNNBoxes:
+    def __init__(self, boxes, scores, labels):
+        self.xyxy = boxes # numpy array
+        self.conf = torch.tensor(scores) # tensor to match YOLO interface
+        self.cls = torch.tensor(labels) # tensor
+        
+    def __iter__(self):
+        for i in range(len(self.xyxy)):
+            yield FasterRCNNBox(self.xyxy[i], self.conf[i], self.cls[i])
+
+class FasterRCNNBox:
+    def __init__(self, box, score, label):
+        self.xyxy = torch.tensor([box]) # YOLO box.xyxy returns tensor of shape [1, 4]
+        self.conf = torch.tensor([score]) # tensor of shape [1]
+        self.cls = torch.tensor([label]) # tensor of shape [1]
+
+@st.cache_resource
+def load_model(model_path, version=1):
+    if str(model_path).endswith('.pt'):
+        model = YOLO(model_path, task='detect')
+    else:
+        # Assume .pth is Faster R-CNN
+        model = FasterRCNNWrapper(model_path)
     return model
 
 def resize_image(image):
@@ -288,7 +409,7 @@ def detect_image_result(detected_image, model):
 
 
             
-            for r in detected_image[0]:
+            for r in detected_image:
                 for box in r.boxes:
                     class_id = int(box.cls[0].item())
                     class_name = class_names[int(class_id)]["name"] 
