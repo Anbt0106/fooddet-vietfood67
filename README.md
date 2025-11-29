@@ -29,7 +29,7 @@ pip install -r requirements.txt
 Run the main pipeline:
 
 ```bash
-python train.py
+python train_Yolov8.py
 ```
 
 This script will:
