@@ -4,6 +4,9 @@ A comprehensive AI-powered system for detecting Vietnamese dishes, featuring a r
 
 **Live Demo:** [FoodDetect Viet67 App](https://fooddet-vietfood67-anbt2k4.streamlit.app/)
 
+
+**500 images test set download link:** [Google Drive](https://drive.google.com/drive/folders/1nDlJMJioFRTNdxuYkOpYsTT0-A-2z8dV?usp=sharing)
+
 ## Features
 
 ### Web Application
