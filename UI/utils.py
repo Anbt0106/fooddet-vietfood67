@@ -1,10 +1,11 @@
 import av
 from pathlib import Path
-from pytubefix import YouTube
+
 from ultralytics import YOLO
 import streamlit as st
 import cv2
 from PIL import Image
+import torch
 import tempfile
 from streamlit_webrtc import VideoProcessorBase, WebRtcMode, webrtc_streamer, VideoTransformerBase
 
@@ -74,156 +75,7 @@ def create_fig(image, detected=False):
     
     return fig
 
-def convert_youtube_url(url):
-    pattern = r"(?:https?://)?(?:www\.)?(?:youtube\.com/shorts/|youtube\.com/watch\?v=|youtu\.be/)([\w\-]{11})"
-    match = re.search(pattern, url)
-    
-    if match:
-        video_id = match.group(1)
-        return f"https://youtu.be/{video_id}"
-    return None
 
-
-def _display_detected_frame(conf, model, youtube_url=""):
-    if youtube_url:
-        youtube_id = convert_youtube_url(youtube_url)
-        if youtube_id:
-            valid_url = youtube_id
-            st.toast('Connecting', icon="🕒")
-            
-            try:
-                yt = YouTube(valid_url)
-                stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
-                if not stream:
-                    st.error("No suitable video stream found.")
-                    return
-
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tfile:
-                    video_path = tfile.name
-                
-                max_retries = 3
-                for attempt in range(max_retries):
-                    try:
-                        stream.download(output_path=os.path.dirname(video_path), filename=os.path.basename(video_path))
-                        break
-                    except Exception as e:
-                        if attempt == max_retries - 1:
-                            raise e
-                        time.sleep(1)
-                
-                results = model(source=video_path, stream=True, conf=conf, imgsz=640, save=True, device="cpu", vid_stride=1)
-                displayed_dishes = set()
-
-                detection_results = ""
-                new_detections = False
-                nutrition_data = []
-                current_time = datetime.datetime.now()
-                time_format = current_time.strftime("%d-%m-%Y")
-                
-                stop_button = st.button("Stop")
-                stop_pressed = False
-
-                st_frame = st.empty()
-
-                frame_count = 0
-                start_time = time.time()
-                fps = 0
-
-
-                st.markdown("""<br>
-                        <h5 class="detection-results">Detection Results</h5><p class="small-text-below-results">We found the following foods in your meal</p>""", unsafe_allow_html=True)
-                # nutrition_placeholder = st.empty()
-
-                for r in results:    
-                    im_bgr = r.plot() 
-                    frame_count += 1
-                    elapsed_time = time.time() - start_time
-                    if elapsed_time >= 1.0:
-                        fps = frame_count / elapsed_time
-                        start_time = time.time()
-                        frame_count = 0
-                    cv2.putText(im_bgr, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 4) 
-
-                    im_rgb = Image.fromarray(im_bgr[..., ::-1])  
-                    im_rgb_resized = im_rgb.resize((640, 640))        
-                    st_frame.image(im_rgb_resized, caption='Predicted Video', use_column_width=True)      
-                    for pred in r.boxes: 
-                        class_id = int(pred.cls[0].item())
-                        class_name = class_names[int(class_id)]["name"]
-                        confident = int(round(pred.conf[0].item(), 2)*100)
-
-
-                        if isinstance(pred.xyxy, torch.Tensor):
-                            boxes = pred.xyxy.cpu().numpy()
-                        else:
-                            boxes = pred.xyxy.numpy()
-                    
-                        image_np = r.orig_img 
-                        
-                        bounding_box_images = extract_bounding_box_image(image_np, boxes)
-
-                        bbox_image_html = ""
-                        if bounding_box_images:
-                            bbox_image = bounding_box_images[0]
-                            bbox_image_pil = Image.fromarray(cv2.cvtColor(bbox_image, cv2.COLOR_BGR2RGB))
-
-                            buffered = io.BytesIO()
-                            bbox_image_pil.save(buffered, format="JPEG")
-                            img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                            bbox_image_html = f'<img src="data:image/jpeg;base64,{img_str}" class="img-each-nutri" ">'
-
-
-                        if class_name == "Con nguoi (Human)" and class_name not in displayed_dishes:
-                            detection_results += f"<p class='human-class-name'><b>Class name:</b> {class_name}</p><p class='human-confident'><b>Confidence:</b> {confident}%</p><hr style='border: none; border-top: 1px dashed black; width: 80%;'>"
-
-                            displayed_dishes.add(class_name)
-                            new_detections = True
-                        elif class_name not in displayed_dishes:
-                            displayed_dishes.add(class_name)
-                            new_detections = True
-                            
-                            detection_results += (
-                                f"""<p class="item-header">{confident}%: <b>{class_name}</b></p>
-                                <hr style="border: none; border-top: 1px dashed black; width: 80%;">
-                                """)
-                            
-                            nutrition_data.append((
-                                class_name,
-                                confident
-                            ))
-                if new_detections:
-                    scrollable_textbox = f"""<div class="result-nutri-container">{detection_results}</div>"""
-                    
-                    st.markdown(scrollable_textbox, unsafe_allow_html=True)
-
-                displayed_dishes.clear()
-
-
-                # with tempfile.NamedTemporaryFile(delete=False, suffix=".csv", dir="/tmp") as csv_file:
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.csv', dir=tempfile.gettempdir()) as csv_file:
-                    csv_filename = csv_file.name
-                with open(csv_filename, mode='w', newline='') as file:
-                    writer = csv.writer(file)
-                    writer.writerow(["Food Name", "Confidence (%)"])
-                    writer.writerows(nutrition_data)
-                with open(csv_filename, "rb") as file:
-                    the_csv = file.read()  
-                
-                st.toast("Prediction completed. Results saved to CSV.", icon="✅")
-                time.sleep(3000)
-                download_csv = st.download_button(label="Download Predictions CSV",
-                                data=the_csv,
-                                file_name=f"{time_format}.csv", 
-                                use_container_width=True,
-                                key=f"download_csv3_button_{time_format}")
-                if download_csv:
-                    os.remove(csv_filename)
-            except ConnectionError as e:
-                st.error(f"Failed to open YouTube video stream: {e}")
-        else:
-            st.error("Invalid YouTube URL or unable to extract YouTube ID.")
-    else:
-        st.error("YouTube URL is required.")
 
 from .faster_rcnn_impl import FasterRCNN_RPL, smart_resize_with_padding, transform_boxes_inverse
 
@@ -299,7 +151,29 @@ class FasterRCNNWrapper:
         return self.predict(source, conf, imgsz, **kwargs)
 
     def __call__(self, source=None, stream=False, **kwargs):
+        if isinstance(source, str) and stream:
+             return self._predict_video_stream(source, **kwargs)
         return self.predict(source, **kwargs)
+
+    def _predict_video_stream(self, source, vid_stride=1, **kwargs):
+        cap = cv2.VideoCapture(source)
+        frame_count = 0
+        while cap.isOpened():
+            success, frame = cap.read()
+            if not success:
+                break
+            
+            if frame_count % vid_stride == 0:
+                 # Predict expects RGB usually if we follow previous logic
+                 # But predict handles numpy array assuming it is BGR?
+                 # Let's check predict: 
+                 # elif isinstance(source, np.ndarray):
+                 #    img_np = source[..., ::-1].copy() # BGR to RGB
+                 # So we pass the BGR frame directly from opencv
+                 yield self.predict(frame, **kwargs)[0]
+            
+            frame_count += 1
+        cap.release()
 
 class FasterRCNNResult:
     def __init__(self, orig_img, boxes, scores, labels):
@@ -815,172 +689,102 @@ def detect_video(conf, uploaded_file, model):
         detect_from_file(conf=conf, video_file=temp_input_file_path, model=model)
 
 def detect_from_file(conf, video_file, model):
-    if video_file:
-        cap = cv2.VideoCapture(video_file)
-
-    current_time = datetime.datetime.now()
-    timestamp = current_time.strftime("%d-%m-%Y")
-
-    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    original_size = (int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), 3)
-
-    # with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4', dir='/tmp') as mp4_file:
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4', dir=tempfile.gettempdir()) as mp4_file:
-        mp4_filename = mp4_file.name
-        out = cv2.VideoWriter(mp4_filename, cv2.VideoWriter_fourcc(*'mp4v'), fps, (frame_width, frame_height))
-    with open(mp4_filename, "rb") as file:
-        the_mp4 = file.read()
-
     st_frame = st.empty()
-
     
-
-    col1, col2, col3 = st.columns(3, gap="large")
-    with col1:
-        rewind_button = st.button("Rewind 10s", use_container_width=True)
+    col1, col2 = st.columns([0.8, 0.2])
     with col2:
         stop_button = st.button("Stop", use_container_width=True)
-        stop_pressed = False
-    with col3:
-        fast_forward_button = st.button("Fast-forward 10s", use_container_width=True)
-
-    frame_count = 0
-    start_time = time.time()
         
-    stop_pressed = False
-    skip_frames = 0
-
-    total_nutrition_placeholder = st.empty()
-    st.markdown("""<br>
-                        <h5 class="detection-results">Detection Results</h5><p class="small-text-below-results">We found the following foods in your meal</p>""", unsafe_allow_html=True)
+    detection_results_container = st.container()
     
-
+    with detection_results_container:
+         st.markdown("""<br>
+                        <h5 class="detection-results">Detection Results</h5><p class="small-text-below-results">We found the following foods in your meal</p>""", unsafe_allow_html=True)
+         
     displayed_dishes = set()
     detection_data = []
-    while True:
+    
+    detection_results_html = ""
+    
+    frame_count = 0
+    start_time = time.time()
+    
+    # Run inference on the source
+    device = 0 if torch.cuda.is_available() else 'cpu'
+    results = model(source=video_file, stream=True, conf=conf, imgsz=640, device=device, vid_stride=1)
 
-        success, image = cap.read()
+    # Temporary file for CSV download
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.csv', dir=tempfile.gettempdir()) as csv_file:
+         csv_filename = csv_file.name
 
-        if skip_frames > 0:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, cap.get(cv2.CAP_PROP_POS_FRAMES) + skip_frames)
-            skip_frames = 0
-        if rewind_button:
-            skip_frames = -int(fps * 10) 
-        if fast_forward_button:
-            skip_frames = int(fps * 10)   
-        if stop_button:
-            stop_pressed = True
-
-        if not success or stop_pressed:
-            break
-
-        results = model.predict(source=image, conf=conf, imgsz=640, save=False, device="cpu")
-
-        new_detections = False  
-        detection_results = ""
-
-            
+    try:
         for r in results:
-            im_bgr = r.plot()           
+            if stop_button:
+                break
+                
+            im_bgr = r.plot()
             frame_count += 1
             elapsed_time = time.time() - start_time
             if elapsed_time >= 1.0:
                 fps = frame_count / elapsed_time
                 start_time = time.time()
                 frame_count = 0
+            else:
+                 # Default FPS if not enough time passed
+                 fps = frame_count / (elapsed_time + 1e-6)
+
             cv2.putText(im_bgr, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
+            
             im_rgb = Image.fromarray(im_bgr[..., ::-1])
-            st_frame.image(im_rgb, caption='Predicted video', use_column_width=True)
+            st_frame.image(im_rgb, caption='Predicted Video', use_column_width=True)
 
-    
+            new_detections = False
+            
             for pred in r.boxes:
                 class_id = int(pred.cls[0].item())
                 class_name = class_names[int(class_id)]["name"]
                 confident = int(round(pred.conf[0].item(), 2)*100)
-                confident = int(round(pred.conf[0].item(), 2)*100)
 
-                if isinstance(pred.xyxy, torch.Tensor):
-                    boxes = pred.xyxy.cpu().numpy()
-                else:
-                    boxes = pred.xyxy.numpy()
-            
-                image_np = r.orig_img 
-                
-                bounding_box_images = extract_bounding_box_image(image_np, boxes)
-
-                bbox_image_html = ""
-                if bounding_box_images:
-                    bbox_image = bounding_box_images[0]
-                    bbox_image_pil = Image.fromarray(cv2.cvtColor(bbox_image, cv2.COLOR_BGR2RGB))
-
-                    buffered = io.BytesIO()
-                    bbox_image_pil.save(buffered, format="JPEG")
-                    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                    bbox_image_html = f'<img src="data:image/jpeg;base64,{img_str}" class="img-each-nutri" ">'
-
-
-                if class_name == "Con nguoi (Human)" and class_name not in displayed_dishes:
-                    detection_results += f"<p class='human-class-name'><b>Class name:</b> {class_name}</p><p class='human-confident'><b>Confidence:</b> {confident}%</p><hr style='border: none; border-top: 1px dashed black; width: 80%;'>"
+                if class_name not in displayed_dishes:
                     displayed_dishes.add(class_name)
                     new_detections = True
-                elif class_name not in displayed_dishes:
-                    displayed_dishes.add(class_name)
-                    new_detections = True
-
-                    detection_results += (
-                    f"""<p class="item-header">{confident}%: <b>{class_name}</b></p>
-                    <hr style="border: none; border-top: 1px dashed black; width: 80%;">
-                    """)
                     
-                    detection_data.append((
-                        class_name,
-                        confident
-                    ))
-                
+                    if class_name == "Con nguoi (Human)":
+                        detection_results_html += f"<p class='human-class-name'><b>Class name:</b> {class_name}</p><p class='human-confident'><b>Confidence:</b> {confident}%</p><hr style='border: none; border-top: 1px dashed black; width: 80%;'>"
+                    else:
+                        detection_results_html += (
+                        f"""<p class="item-header">{confident}%: <b>{class_name}</b></p>
+                        <hr style="border: none; border-top: 1px dashed black; width: 80%;">
+                        """)
+                    
+                    if class_name != "Con nguoi (Human)":
+                        detection_data.append((class_name, confident))
+
             if new_detections:
-                scrollable_textbox = f"""<div class="result-nutri-container">{detection_results}</div>"""
-                
-                st.markdown(scrollable_textbox, unsafe_allow_html=True)
+                with detection_results_container:
+                     st.markdown(f"""<div class="result-nutri-container">{detection_results_html}</div>""", unsafe_allow_html=True)
 
-
-
-
-            if stop_button:
-                stop_pressed = True
-                stop_button = None
-                break
-
-        cap.release()
-        out.release()
-        displayed_dishes.clear()
-
-
-        # with tempfile.NamedTemporaryFile(delete=False, suffix=".csv", dir="/tmp") as csv_file:
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.csv', dir=tempfile.gettempdir()) as csv_file:
-            csv_filename = csv_file.name
+        # Save CSV
         with open(csv_filename, mode='w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(["Food Name", "Confidence (%)"])
             writer.writerows(detection_data)
+            
         with open(csv_filename, "rb") as file:
             the_csv = file.read()
-        
-        col1, col2 = st.columns(2, gap="large")
-        with col1:    
-            download_video = st.download_button(label="Download Processed Video",
-                                    data=the_mp4,
-                                    mime="video/mp4",
-                                    file_name=f"{timestamp}.mp4", 
-                                    use_container_width=True,)
-            if download_video:
-                os.remove(mp4_filename)
-        with col2: 
-            download_csv = st.download_button(label="Download Predictions CSV", 
-                                data=the_csv, 
-                                file_name=f"{timestamp}.csv", 
-                                use_container_width=True,)
-            if download_csv:
-                os.remove(csv_filename)
+
+        st.toast("Prediction completed. Results saved to CSV.", icon="✅")
+        st.download_button(label="Download Predictions CSV", 
+                            data=the_csv, 
+                            file_name=f"{datetime.datetime.now().strftime('%d-%m-%Y')}.csv", 
+                            use_container_width=True)
+
+    except Exception as e:
+        st.error(f"Error during video processing: {e}")
+    finally:
+        if os.path.exists(csv_filename):
+             # We can't delete immediately if the user needs to download, 
+             # but streamlit re-runs might clean up manually or OS will handle temp files.
+             # Ideally, keep it until download is clicked or use session state.
+             # For now, let's leave it as is, or use st.download_button which handles buffer.
+             pass

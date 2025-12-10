@@ -1,9 +1,9 @@
 import streamlit as st
-import time
+
 import base64 
 from pathlib import Path
-# from streamlit_navigation_bar import st_navbar
-from UI.utils import _display_detected_frame, detect_camera, detect_image, detect_video, detect_webcam, load_model
+
+from UI.utils import detect_image, detect_video, detect_webcam, load_model
 
 st.set_page_config(
     page_title="FoodDetector",
@@ -11,25 +11,7 @@ st.set_page_config(
     
 )
 
-# import streamlit as st
-# from PIL import Image
 
-# image = Image.open('./pages/bg-about-cuisine.jpg')
-
-# st.image(image)
-# st.markdown(f"""
-# <style>
-#     .stImage  {{
-#         position: relative;
-#         width: 100%;
-#         height: calc(100px + 7vw);
-#         overflow: hidden;
-#     }}
-# """, unsafe_allow_html=True)
-
-# st.markdown(f"""
-# <h1 class="header-title">📑 About FoodDetector</h1>
-#             """, unsafe_allow_html=True)         
 
 st.markdown('''
     <div id="top-section"></div>
@@ -43,7 +25,7 @@ img_path = Path(__file__).parent / 'UI/assets/img/bg-about-cuisine.png'
 img_base64 = img_to_base64(img_path)
 
 import os
-import glob
+
 
 def get_available_models():
     model_dir = Path(__file__).parent / "UI/model"
@@ -61,7 +43,13 @@ def get_available_models():
                     # Generate a nicer display name
                     if file == 'best.pt':
                         # Use parent folder name for YOLO models named best.pt
-                        display_name = f"YOLOv8s"
+                        parent_name = full_path.parent.name
+                        if "yolov8n" in parent_name:
+                             display_name = "YOLOv8n"
+                        elif "yolov8s" in parent_name:
+                             display_name = "YOLOv8s"
+                        else:
+                             display_name = parent_name
                     elif file == 'checkpoint_best_rpl.pth':
                         display_name = "Faster R-CNN"
                     else:
@@ -123,18 +111,12 @@ def render_content():
     </style>
 """, unsafe_allow_html=True)
         
-    tab1, tab2, tab3, tab4 = st.tabs(["Image", "Video", "Webcam", "IP Camera"])
+    tab1, tab2, tab3 = st.tabs(["Image", "Video", "Webcam"])
 
     with tab1:
         st.subheader("Image Upload :frame_with_picture:")
 
-        # Accordion
-        expander = st.expander("Instructions: Image upload and URL")  
-        expander.write('''
-- Uploading image files from the user's local machine or using an image URL is supported.
-- After the prediction process, two buttons will appear to download the results as an image file with bounding boxes or a CSV file.
-- The results are generated when the user clicks the button and are named in the format: `"%date-%month-%year".jpg/csv`.
-        ''', unsafe_allow_html=True)
+
         st.markdown(f'''
 <style>
 [data-testid="stExpanderDetails"] ul li {{
@@ -168,81 +150,21 @@ def render_content():
     with tab2:
                     
         st.subheader("Video Upload :movie_camera:")
-        expander = st.expander("Instructions: Video upload and URL")  
-        expander.write('''
-- Video: upload video files `(.mp4, .mpeg4, etc.)` from the user's local machine.
-- Youtube video or shorts URL links are supported for real-time prediction.
-- The results will be in a CSV file recording all dishes detected across all frames (no image results).
-        ''', unsafe_allow_html=True)
+
         
         uploaded_clip = st.file_uploader("Choose a clip", accept_multiple_files=False, type=['mp4'])
         if uploaded_clip:
             detect_video(conf=0.5, uploaded_file=uploaded_clip, model=model1)
 
-        else:
-            st.markdown('<br><br>', unsafe_allow_html=True) 
-            st.subheader("Enter YouTube URL :tv:")
-            # tube = st.empty()
-            with st.form("youtube_form"):
-                col1, col2 = st.columns([0.8, 0.2], gap="medium")
-                with col1:
-                    youtube_url = st.text_input("Label", label_visibility="collapsed", placeholder="https://youtu.be/LNwODJXcvt4")
-                with col2:
-                    submitted = st.form_submit_button("Predict", use_container_width=True)
-            if submitted and youtube_url:            
-                _display_detected_frame(conf=0.5, model=model1, 
-                                       
-                                        youtube_url=youtube_url)
+
 
     with tab3:
         
         st.header("Webcam :camera:")
-        expander = st.expander("Instructions: Webcam connection")  
-        expander.write('''
-- Webcam: [Streamlit-webrtc](https://github.com/whitphx/streamlit-webrtc) is used to handle local webcam connection due to deployment on [Streamlit Community Cloud](https://docs.streamlit.io/deploy/streamlit-community-cloud).
-- Users can choose their webcam input for live detection.
-- No result files will be generated as the process may run continuously.
 
-        ''', unsafe_allow_html=True)
         detect_webcam(0.5, model=model1)
 
-    with tab4:
-        
-        st.header("IP Camera :video_camera:")
-        expander = st.expander("Instructions: IP Camera connection")  
-        expander.write('''
-- IP Camera: A RTSP address of the user’s camera must be provided.
-- The camera must be configured beforehand to allow connection from an external network.
-        ''', unsafe_allow_html=True)    
-        
-        st.text("Enter your Camera (RTSP) address: ")
-        with st.form("ip_camera_form"):
-            col1, col2 = st.columns([2, 8])
-            with col1:
-                st.write("rtsp://admin:") 
-            with col2:
-                address = st.text_input(
-                    "Label", 
-                    label_visibility="collapsed", 
-                    placeholder="hd543211@192.168.14.106:554/Streaming/channels/101"
-                )
-                
-            col1, col2 = st.columns([2, 1.35])
-            with col1:
-                submitted = st.form_submit_button("Connect")
-            with col2:
-                cancel = st.form_submit_button("Disconnect")
-        
-            if submitted:
-                if address:
-                    detect_camera(0.5, model1, address=address)
-                else:
-                    st.error("Please enter a valid RTSP camera URL")
-            
-            if cancel:
-                if address:
-                    detect_camera(0.5, model1, address="")
-                    st.toast("Disconnected", icon="✅")
+
 
     st.markdown('''
     <div>
@@ -285,12 +207,7 @@ def styling_css():
         st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
  
         
-def home_page():
-    st.markdown(navbar('Home'), unsafe_allow_html=True)
-    
 
-def about_page():
-    st.markdown(navbar('About'), unsafe_allow_html=True)
     
 
 # Main app logic
