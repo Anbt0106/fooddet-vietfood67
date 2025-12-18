@@ -33,4 +33,3 @@ runs/
 __pycache__/
 *.py[cod]
 
-outputs/outputs_FasterRNN/checkpoints/
